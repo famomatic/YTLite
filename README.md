@@ -6,7 +6,7 @@
 
 ---
 
-## ℹ️ Version Info
+## ℹ️ Latest Version Info
 
 - **YouTube Version**: 20.31.5  
 - **YTLite Version**: 5.2b2
