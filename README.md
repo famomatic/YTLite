@@ -1,7 +1,19 @@
-This repositery is fork of [dayanch96/YTLite](https://github.com/dayanch96/YTLite)
+# YTLite (Forked Version)
 
-You can download .ipa at [here](https://github.com/famomatic/YTLite/releases)
+> This repository is a fork of [dayanch96/YTLite](https://github.com/dayanch96/YTLite)
 
-Used YouTube Version: 20.31.5
+📦 **Download the .ipa file**: [Available here on the Releases page](https://github.com/famomatic/YTLite/releases)
 
-Used YTLite Version: 5.2b2
+---
+
+## ℹ️ Version Info
+
+- **YouTube Version**: 20.31.5  
+- **YTLite Version**: 5.2b2
+
+---
+
+## ⚙️ Installation Notes
+
+I'm using [AltStore](https://altstore.io) to install the app.  
+**Note:** YTLite requires **2 App IDs** for proper installation.
