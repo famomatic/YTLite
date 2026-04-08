@@ -1,6 +1,7 @@
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
 #import <Photos/Photos.h>
+#import <objc/message.h>
 #import "Utils/NSBundle+YTLite.h"
 #import "Utils/YTLUserDefaults.h"
 #import "Utils/Reachability.h"
@@ -13,6 +14,109 @@
 
 #define ytlSetBool(value, key) [[YTLUserDefaults standardUserDefaults] setBool:(value) forKey:(key)]
 #define ytlSetInt(value, key) [[YTLUserDefaults standardUserDefaults] setInteger:(value) forKey:(key)]
+
+static inline NSInteger ytlClampedIndex(NSInteger index, NSUInteger count) {
+    if (count == 0 || index < 0) {
+        return 0;
+    }
+
+    if ((NSUInteger)index >= count) {
+        return (NSInteger)count - 1;
+    }
+
+    return index;
+}
+
+static inline id ytlValueForKeySafe(id object, NSString *key) {
+    if (!object || key.length == 0) {
+        return nil;
+    }
+
+    @try {
+        return [object valueForKey:key];
+    } @catch (__unused NSException *exception) {
+        return nil;
+    }
+}
+
+static inline void ytlSetValueForKeySafe(id object, id value, NSString *key) {
+    if (!object || key.length == 0) {
+        return;
+    }
+
+    @try {
+        [object setValue:value forKey:key];
+    } @catch (__unused NSException *exception) {
+    }
+}
+
+static inline BOOL ytlClassExists(NSString *className) {
+    return NSClassFromString(className) != Nil;
+}
+
+static inline BOOL ytlInstancesRespondToSelectorNamed(NSString *className, NSString *selectorName) {
+    Class cls = NSClassFromString(className);
+    SEL selector = NSSelectorFromString(selectorName);
+    return cls && selector && [cls instancesRespondToSelector:selector];
+}
+
+static inline BOOL ytlClassRespondsToSelectorNamed(NSString *className, NSString *selectorName) {
+    Class cls = NSClassFromString(className);
+    SEL selector = NSSelectorFromString(selectorName);
+    return cls && selector && [cls respondsToSelector:selector];
+}
+
+static inline BOOL ytlObjectRespondsToSelectorNamed(id object, NSString *selectorName) {
+    SEL selector = NSSelectorFromString(selectorName);
+    return object && selector && [object respondsToSelector:selector];
+}
+
+static inline BOOL ytlFeatureSupported(NSString *key) {
+    if ([key isEqualToString:@"dontSnapToChapter"]) {
+        return ytlClassExists(@"YTSegmentableInlinePlayerBarView");
+    }
+
+    if ([key isEqualToString:@"noFreeZoom"]) {
+        return ytlInstancesRespondToSelectorNamed(@"YTColdConfig", @"videoZoomFreeZoomEnabledGlobalConfig");
+    }
+
+    if ([key isEqualToString:@"hideSortComments"]) {
+        return ytlInstancesRespondToSelectorNamed(@"YTColdConfig", @"enableChipsInTheCommentsHeaderIos");
+    }
+
+    if ([key isEqualToString:@"stockVolumeHUD"]) {
+        return ytlInstancesRespondToSelectorNamed(@"YTColdConfig", @"iosUseSystemVolumeControlInFullscreen");
+    }
+
+    if ([key isEqualToString:@"hideShortsLike"]) {
+        return ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setReelLikeButton:");
+    }
+
+    if ([key isEqualToString:@"hideShortsDislike"]) {
+        return ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setReelDislikeButton:");
+    }
+
+    if ([key isEqualToString:@"hideShortsComments"]) {
+        return ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setViewCommentButton:");
+    }
+
+    if ([key isEqualToString:@"hideShortsRemix"]) {
+        return ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setRemixButton:");
+    }
+
+    if ([key isEqualToString:@"hideShortsAvatars"]) {
+        return ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setNativePivotButton:")
+            || ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setPivotButtonElementRenderer:");
+    }
+
+    return YES;
+}
+
+static inline void ytlResetUnsupportedFeature(NSString *key) {
+    if (key.length > 0 && !ytlFeatureSupported(key) && ytlBool(key)) {
+        ytlSetBool(NO, key);
+    }
+}
 
 @interface YTTouchFeedbackController : YTCollectionViewCell
 @property (nonatomic, strong, readwrite) UIColor *feedbackColor;

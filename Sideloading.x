@@ -1,6 +1,7 @@
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
 #import <dlfcn.h>
+#import "YTLite.h"
 
 #define YT_BUNDLE_ID @"com.google.ios.youtube"
 #define YT_NAME @"YouTube"
@@ -19,10 +20,11 @@ static NSString *accessGroupID() {
                            nil];
     CFDictionaryRef result = nil;
     OSStatus status = SecItemCopyMatching((__bridge CFDictionaryRef)query, (CFTypeRef *)&result);
-    if (status == errSecItemNotFound)
+    if (status == errSecItemNotFound) {
         status = SecItemAdd((__bridge CFDictionaryRef)query, (CFTypeRef *)&result);
-        if (status != errSecSuccess)
-            return nil;
+    }
+    if (status != errSecSuccess)
+        return nil;
     NSString *accessGroup = [(__bridge NSDictionary *)result objectForKey:(__bridge NSString *)kSecAttrAccessGroup];
 
     return accessGroup;
@@ -65,14 +67,15 @@ static NSString *accessGroupID() {
 %hook SSOConfiguration
 - (id)initWithClientID:(id)clientID supportedAccountServices:(id)supportedAccountServices {
     self = %orig;
-    [self setValue:YT_NAME forKey:@"_shortAppName"];
-    [self setValue:YT_BUNDLE_ID forKey:@"_applicationIdentifier"];
+    ytlSetValueForKeySafe(self, YT_NAME, @"_shortAppName");
+    ytlSetValueForKeySafe(self, YT_BUNDLE_ID, @"_applicationIdentifier");
     return self;
 }
 %end
 
 BOOL isSelf() {
     NSArray *address = [NSThread callStackReturnAddresses];
+    if (address.count <= 2) return NO;
     Dl_info info = {0};
     if (dladdr((void *)[address[2] longLongValue], &info) == 0) return NO;
     NSString *path = [NSString stringWithUTF8String:info.dli_fname];
@@ -87,7 +90,7 @@ BOOL isSelf() {
 - (NSDictionary *)infoDictionary {
     NSDictionary *dict = %orig;
     if (!isSelf())
-        return %orig;
+        return dict;
     NSMutableDictionary *info = [dict mutableCopy];
     if (info[@"CFBundleIdentifier"]) info[@"CFBundleIdentifier"] = YT_BUNDLE_ID;
     if (info[@"CFBundleDisplayName"]) info[@"CFBundleDisplayName"] = YT_NAME;
