@@ -8,6 +8,34 @@ static NSInteger ytlIntClamped(NSString *key, NSArray *values) {
     return ytlClampedIndex(ytlInt(key), values.count);
 }
 
+static BOOL ytlStringContainsAny(NSString *string, NSArray<NSString *> *needles) {
+    if (![string isKindOfClass:[NSString class]] || string.length == 0) {
+        return NO;
+    }
+
+    NSString *lowercaseString = string.lowercaseString;
+    for (NSString *needle in needles) {
+        if (needle.length > 0 && [lowercaseString containsString:needle.lowercaseString]) {
+            return YES;
+        }
+    }
+
+    return NO;
+}
+
+static BOOL ytlObjectMatchesHints(id object, NSArray<NSString *> *hints) {
+    if (!object) {
+        return NO;
+    }
+
+    NSString *identifier = [[ytlValueForKeySafe(object, @"accessibilityIdentifier") description] lowercaseString];
+    if (ytlStringContainsAny(identifier, hints)) {
+        return YES;
+    }
+
+    return ytlStringContainsAny([[object description] lowercaseString], hints);
+}
+
 static BOOL ytlViewHasGestureWithSelector(UIView *view, SEL selector) {
     for (UIGestureRecognizer *gesture in view.gestureRecognizers) {
         NSArray *targets = [ytlValueForKeySafe(gesture, @"_targets") copy];
@@ -21,6 +49,22 @@ static BOOL ytlViewHasGestureWithSelector(UIView *view, SEL selector) {
     }
 
     return NO;
+}
+
+static void ytlHideMatchedViewsRecursively(UIView *view, NSArray<NSString *> *hints) {
+    if (!view) {
+        return;
+    }
+
+    if (ytlObjectMatchesHints(view, hints)) {
+        view.hidden = YES;
+        view.userInteractionEnabled = NO;
+        view.alpha = 0.0;
+    }
+
+    for (UIView *subview in view.subviews) {
+        ytlHideMatchedViewsRecursively(subview, hints);
+    }
 }
 
 // YouTube-X (https://github.com/PoomSmart/YouTube-X/)
@@ -57,14 +101,42 @@ static BOOL ytlViewHasGestureWithSelector(UIView *view, SEL selector) {
 
     NSString *description = [self description];
 
-    NSArray *ads = @[@"brand_promo", @"product_carousel", @"product_engagement_panel", @"product_item", @"text_search_ad", @"text_image_button_layout", @"carousel_headered_layout", @"carousel_footered_layout", @"square_image_layout", @"landscape_image_wide_button_layout", @"feed_ad_metadata"];
-    if (ytlBool(@"noAds") && [ads containsObject:description]) {
+    NSArray *ads = @[
+        @"brand_promo",
+        @"product_carousel",
+        @"product_engagement_panel",
+        @"product_item",
+        @"text_search_ad",
+        @"text_image_button_layout",
+        @"carousel_headered_layout",
+        @"carousel_footered_layout",
+        @"square_image_layout",
+        @"landscape_image_wide_button_layout",
+        @"feed_ad_metadata",
+        @"id.ui.ad.suggested_video",
+        @"promoted_video",
+        @"player_overlay_product_in_video",
+        @"player_overlay_layout_feed_ad_extension_carousel_key",
+        @"player_overlay_paid_content"
+    ];
+    if (ytlBool(@"noAds") && ytlStringContainsAny(description, ads)) {
         return [NSData data];
     }
 
-    NSArray *shortsToRemove = @[@"shorts_shelf.eml", @"shorts_video_cell.eml", @"6Shorts"];
+    NSArray *shortsToRemove = @[
+        @"shorts_shelf.eml",
+        @"shorts_video_cell.eml",
+        @"6shorts",
+        @"eml.shorts-grid",
+        @"eml.shorts-shelf",
+        @"id.reel_overlay",
+        @"id.reel_pivot_button",
+        @"id.reels_",
+        @"id.channel.reel.avatar",
+        @"reel_watch"
+    ];
     for (NSString *shorts in shortsToRemove) {
-        if (ytlBool(@"hideShorts") && [description containsString:shorts] && ![description containsString:@"history*"]) {
+        if (ytlBool(@"hideShorts") && [description.lowercaseString containsString:shorts] && ![description containsString:@"history*"]) {
             return nil;
         }
     }
@@ -187,8 +259,14 @@ static BOOL ytlViewHasGestureWithSelector(UIView *view, SEL selector) {
 - (void)setImage:(UIImage *)image {
     if (!ytlBool(@"premiumYTLogo")) return %orig;
 
-    NSString *resourcesPath = [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"Frameworks/Module_Framework.framework/Innertube_Resources.bundle"];
+    NSString *resourcesPath = [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"Innertube_Resources.bundle"];
+    if (![[NSFileManager defaultManager] fileExistsAtPath:resourcesPath]) {
+        resourcesPath = [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"Frameworks/Module_Framework.framework/Innertube_Resources.bundle"];
+    }
     NSBundle *frameworkBundle = [NSBundle bundleWithPath:resourcesPath];
+    if (!frameworkBundle) {
+        return %orig(image);
+    }
 
     if ([[image description] containsString:@"Resources: youtube_logo)"]) {
         image = [UIImage imageNamed:@"youtube_premium_logo" inBundle:frameworkBundle compatibleWithTraitCollection:nil];
@@ -251,6 +329,7 @@ static BOOL ytlViewHasGestureWithSelector(UIView *view, SEL selector) {
 - (BOOL)replacePreviousPaddleWithRewindButtonForSingletonVods { return ytlBool(@"replacePrevNext") ? YES : %orig; }
 // Disable Free Zoom
 - (BOOL)videoZoomFreeZoomEnabledGlobalConfig { return ytlBool(@"noFreeZoom") ? NO : %orig; }
+- (BOOL)videoZoomFreeZoomEnabled { return ytlBool(@"noFreeZoom") ? NO : %orig; }
 // Stick Sort Buttons in Comments Section
 - (BOOL)enableHideChipsInTheCommentsHeaderOnScrollIos { return ytlBool(@"stickSortComments") ? NO : %orig; }
 // Hide Sort Buttons in Comments Section
@@ -263,6 +342,17 @@ static BOOL ytlViewHasGestureWithSelector(UIView *view, SEL selector) {
 - (BOOL)enableSwipeToRemoveInPlaylistWatchEp { return YES; }
 // Enable Old-style Minibar For Playlist Panel
 - (BOOL)queueClientGlobalConfigEnableFloatingPlaylistMinibar { return ytlBool(@"playlistOldMinibar") ? NO : %orig; }
+- (BOOL)musicClientInfraConfigIosEnableSystemDefaultVolumeControl { return ytlBool(@"stockVolumeHUD") ? YES : %orig; }
+%end
+
+%hook YTCommentsHeaderView
+- (void)layoutSubviews {
+    %orig;
+
+    if (ytlBool(@"hideSortComments")) {
+        ytlHideMatchedViewsRecursively(self, @[@"id.watch.comments.filter.button"]);
+    }
+}
 %end
 
 // Remove Dark Background in Overlay
@@ -705,13 +795,20 @@ void autoSkipShorts(YTPlayerViewController *self, YTSingleVideoController *video
 
 // Hide buttons under the video player (@PoomSmart)
 static BOOL findCell(ASNodeController *nodeController, NSArray <NSString *> *identifiers) {
+    if (ytlObjectMatchesHints(nodeController, identifiers) || ytlObjectMatchesHints(nodeController.node, identifiers)) {
+        return YES;
+    }
+
     for (id child in [nodeController children]) {
+        if (ytlObjectMatchesHints(child, identifiers)) {
+            return YES;
+        }
+
         if ([child isKindOfClass:%c(ELMNodeController)]) {
             NSArray <ELMComponent *> *elmChildren = [(ELMNodeController *)child children];
             for (ELMComponent *elmChild in elmChildren) {
-                for (NSString *identifier in identifiers) {
-                    if ([[elmChild description] containsString:identifier])
-                        return YES;
+                if (ytlObjectMatchesHints(elmChild, identifiers)) {
+                    return YES;
                 }
             }
         }
@@ -720,8 +817,9 @@ static BOOL findCell(ASNodeController *nodeController, NSArray <NSString *> *ide
             ASDisplayNode *childNode = ((ASNodeController *)child).node; // ELMContainerNode
             NSArray *yogaChildren = childNode.yogaChildren;
             for (ASDisplayNode *displayNode in yogaChildren) {
-                if ([identifiers containsObject:displayNode.accessibilityIdentifier])
+                if (ytlObjectMatchesHints(displayNode, identifiers)) {
                     return YES;
+                }
             }
 
             if (findCell(child, identifiers)) {
@@ -732,21 +830,47 @@ static BOOL findCell(ASNodeController *nodeController, NSArray <NSString *> *ide
     return NO;
 }
 
+static BOOL ytlCollectionCellMatchesHints(UICollectionViewCell *cell, NSArray<NSString *> *hints) {
+    if (!cell) {
+        return NO;
+    }
+
+    if (ytlObjectMatchesHints(cell, hints) || ytlObjectMatchesHints(cell.contentView, hints)) {
+        return YES;
+    }
+
+    if ([cell isKindOfClass:objc_lookUpClass("_ASCollectionViewCell")] && [cell respondsToSelector:@selector(node)]) {
+        id node = ((id (*)(id, SEL))objc_msgSend)(cell, @selector(node));
+        if (ytlObjectMatchesHints(node, hints)) {
+            return YES;
+        }
+
+        if ([node respondsToSelector:@selector(controller)]) {
+            id controller = ((id (*)(id, SEL))objc_msgSend)(node, @selector(controller));
+            if ([controller isKindOfClass:%c(ASNodeController)] && findCell((ASNodeController *)controller, hints)) {
+                return YES;
+            }
+        }
+    }
+
+    return NO;
+}
+
 %hook ASCollectionView
 - (CGSize)sizeForElement:(ASCollectionElement *)element {
-    if ([self.accessibilityIdentifier isEqualToString:@"id.video.scrollable_action_bar"]) {
+    if (ytlObjectMatchesHints(self, @[@"id.video.scrollable_action_bar", @"id.video.detailsactions.view"])) {
         ASCellNode *node = [element node];
         ASNodeController *nodeController = [node controller];
 
-        if (ytlBool(@"noPlayerRemixButton") && findCell(nodeController, @[@"id.video.remix.button"])) {
+        if (ytlBool(@"noPlayerRemixButton") && findCell(nodeController, @[@"id.video.remix.button", @"remix"])) {
             return CGSizeZero;
         }
 
-        if (ytlBool(@"noPlayerClipButton") && findCell(nodeController, @[@"clip_button.eml"])) {
+        if (ytlBool(@"noPlayerClipButton") && findCell(nodeController, @[@"clip_button.eml", @"clip_edit", @"clip trim"])) {
             return CGSizeZero;
         }
 
-        if (ytlBool(@"noPlayerDownloadButton") && findCell(nodeController, @[@"id.ui.add_to.offline.button"])) {
+        if (ytlBool(@"noPlayerDownloadButton") && findCell(nodeController, @[@"id.ui.add_to.offline.button", @"offline", @"download"])) {
             return CGSizeZero;
         }
     }
@@ -761,20 +885,28 @@ static BOOL findCell(ASNodeController *nodeController, NSArray <NSString *> *ide
     UICollectionViewCell *cell = %orig;
     if (!cell) return nil;
 
-    if ([cell isKindOfClass:objc_lookUpClass("_ASCollectionViewCell")]) {
-        _ASCollectionViewCell *collectionCell = (_ASCollectionViewCell *)cell;
-        if ([collectionCell respondsToSelector:@selector(node)]) {
-            NSString *idToRemove = [[collectionCell node] accessibilityIdentifier];
-            if ([idToRemove isEqualToString:@"statement_banner.view"] ||
-                (([idToRemove isEqualToString:@"eml.shorts-grid"] || [idToRemove isEqualToString:@"eml.shorts-shelf"]) && ytlBool(@"hideShorts"))) {
-                cell.hidden = YES;
-                cell.userInteractionEnabled = NO;
-                cell.contentView.hidden = YES;
-                cell.alpha = 0.0;
-            }
-        }
+    if (ytlCollectionCellMatchesHints(cell, @[@"statement_banner.view"])) {
+        cell.hidden = YES;
+        cell.userInteractionEnabled = NO;
+        cell.contentView.hidden = YES;
+        cell.alpha = 0.0;
+    } else if (ytlBool(@"hideShorts") && ytlCollectionCellMatchesHints(cell, @[
+        @"statement_banner.view",
+        @"eml.shorts-grid",
+        @"eml.shorts-shelf",
+        @"id.reel_overlay",
+        @"id.reel_pivot_button",
+        @"id.reels_",
+        @"id.channel.reel.avatar",
+        @"reel_pivot_button.eml",
+        @"reel_watch"
+    ])) {
+        cell.hidden = YES;
+        cell.userInteractionEnabled = NO;
+        cell.contentView.hidden = YES;
+        cell.alpha = 0.0;
     } else if (([cell isKindOfClass:objc_lookUpClass("YTReelShelfCell")] && ytlBool(@"hideShorts")) ||
-        ([cell isKindOfClass:objc_lookUpClass("YTHorizontalCardListCell")] && ytlBool(@"noContinueWatching"))) {
+        (([cell isKindOfClass:objc_lookUpClass("YTHorizontalCardListCell")] || [cell isKindOfClass:objc_lookUpClass("YTContinueWatchingCell")]) && ytlBool(@"noContinueWatching"))) {
         cell.hidden = YES;
         cell.userInteractionEnabled = NO;
         cell.contentView.hidden = YES;
@@ -806,6 +938,7 @@ static BOOL findCell(ASNodeController *nodeController, NSArray <NSString *> *ide
 %end
 
 %hook YTShortsPlayerViewController
+- (BOOL)shouldEnablePlayerBar { return ytlBool(@"shortsProgress") ? YES : NO; }
 - (BOOL)shouldAlwaysEnablePlayerBar { return ytlBool(@"shortsProgress") ? YES : NO; }
 - (BOOL)shouldEnablePlayerBarOnlyOnPause { return ytlBool(@"shortsProgress") ? NO : YES; }
 %end
@@ -836,7 +969,12 @@ static BOOL findCell(ASNodeController *nodeController, NSArray <NSString *> *ide
 - (void)setViewCommentButton:(id)arg1 { if (!ytlBool(@"hideShortsComments")) %orig; }
 - (void)setRemixButton:(id)arg1 { if (!ytlBool(@"hideShortsRemix")) %orig; }
 - (void)setShareButton:(id)arg1 { if (!ytlBool(@"hideShortsShare")) %orig; }
+- (void)setLikeButton:(id)arg1 { if (!ytlBool(@"hideShortsLike")) %orig; }
+- (void)setDislikeButton:(id)arg1 { if (!ytlBool(@"hideShortsDislike")) %orig; }
+- (void)setCommentInputButton:(id)arg1 { if (!ytlBool(@"hideShortsComments")) %orig; }
+- (void)setActionButton:(id)arg1 { if (!ytlBool(@"hideShortsRemix")) %orig; }
 - (void)setNativePivotButton:(id)arg1 { if (!ytlBool(@"hideShortsAvatars")) %orig; }
+- (void)setChannelReelAvatarButton:(id)arg1 { if (!ytlBool(@"hideShortsAvatars")) %orig; }
 - (void)setPivotButtonElementRenderer:(id)arg1 { if (!ytlBool(@"hideShortsAvatars")) %orig; }
 %end
 
@@ -1000,21 +1138,21 @@ static void genImageFromLayer(CALayer *layer, UIColor *backgroundColor, void (^c
 - (void)setFrame:(CGRect)frame {
     %orig;
 
-    if (ytlBool(@"commentManager") && [[ytlValueForKeySafe(self, @"_accessibilityIdentifier") description] isEqualToString:@"id.comment.content.label"]) {
-        if ([self isKindOfClass:NSClassFromString(@"ASTextNode")]) {
-            ASTextNode *textNode = (ASTextNode *)self;
+    if (ytlBool(@"commentManager") && [self isKindOfClass:NSClassFromString(@"ASTextNode")]) {
+        ASTextNode *textNode = (ASTextNode *)self;
 
-            NSString *comment;
-            if ([textNode respondsToSelector:@selector(attributedText)]) {
-                if (textNode.attributedText) comment = textNode.attributedText.string;
-            }
+        NSString *comment;
+        if ([textNode respondsToSelector:@selector(attributedText)] && textNode.attributedText) {
+            comment = textNode.attributedText.string;
+        }
 
-            NSMutableArray *allObjects = self.supernodes.allObjects;
-            for (ELMContainerNode *containerNode in allObjects) {
-                if ([containerNode.description containsString:@"id.ui.comment_cell"] && comment) {
+        NSMutableArray *allObjects = self.supernodes.allObjects;
+        for (ELMContainerNode *containerNode in allObjects) {
+            if ([containerNode.description containsString:@"id.ui.comment_cell"] && comment.length > 0) {
+                if (comment.length >= containerNode.copiedComment.length) {
                     containerNode.copiedComment = comment;
-                    break;
                 }
+                break;
             }
         }
     }
@@ -1032,8 +1170,10 @@ static void genImageFromLayer(CALayer *layer, UIColor *backgroundColor, void (^c
 
             NSMutableArray *allObjects = self.supernodes.allObjects;
             for (ELMContainerNode *containerNode in allObjects) {
-                if ([containerNode.description containsString:@"id.ui.backstage.original_post"] && text) {
-                    containerNode.copiedComment = text;
+                if ([containerNode.description containsString:@"id.ui.backstage"] && text.length > 0) {
+                    if (text.length >= containerNode.copiedComment.length) {
+                        containerNode.copiedComment = text;
+                    }
                     break;
                 }
             }
@@ -1052,7 +1192,7 @@ static void genImageFromLayer(CALayer *layer, UIColor *backgroundColor, void (^c
 
         NSMutableArray *allObjects = displayNode.supernodes.allObjects;
         for (ELMContainerNode *containerNode in allObjects) {
-            if ([containerNode.description containsString:@"id.ui.backstage.original_post"]) {
+            if ([containerNode.description containsString:@"id.ui.backstage"]) {
                 containerNode.copiedURL = URL;
                 break;
             }
@@ -1068,7 +1208,7 @@ static void genImageFromLayer(CALayer *layer, UIColor *backgroundColor, void (^c
     %orig;
 
     NSArray *gesturesInfo = @[
-        @{@"selector": @"postManager:", @"text": @"id.ui.backstage.original_post", @"key": @(ytlBool(@"postManager"))},
+        @{@"selector": @"postManager:", @"text": @"id.ui.backstage", @"key": @(ytlBool(@"postManager"))},
         @{@"selector": @"savePFP:", @"text": @"ELMImageNode-View", @"key": @(ytlBool(@"saveProfilePhoto"))},
         @{@"selector": @"commentManager:", @"text": @"id.ui.comment_cell", @"key": @(ytlBool(@"commentManager"))}
     ];

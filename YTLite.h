@@ -77,35 +77,43 @@ static inline BOOL ytlFeatureSupported(NSString *key) {
     }
 
     if ([key isEqualToString:@"noFreeZoom"]) {
-        return ytlInstancesRespondToSelectorNamed(@"YTColdConfig", @"videoZoomFreeZoomEnabledGlobalConfig");
+        return ytlInstancesRespondToSelectorNamed(@"YTColdConfig", @"videoZoomFreeZoomEnabledGlobalConfig")
+            || ytlInstancesRespondToSelectorNamed(@"YTColdConfig", @"videoZoomFreeZoomEnabled");
     }
 
     if ([key isEqualToString:@"hideSortComments"]) {
-        return ytlInstancesRespondToSelectorNamed(@"YTColdConfig", @"enableChipsInTheCommentsHeaderIos");
+        return ytlInstancesRespondToSelectorNamed(@"YTColdConfig", @"enableChipsInTheCommentsHeaderIos")
+            || ytlClassExists(@"YTCommentsHeaderView");
     }
 
     if ([key isEqualToString:@"stockVolumeHUD"]) {
-        return ytlInstancesRespondToSelectorNamed(@"YTColdConfig", @"iosUseSystemVolumeControlInFullscreen");
+        return ytlInstancesRespondToSelectorNamed(@"YTColdConfig", @"iosUseSystemVolumeControlInFullscreen")
+            || ytlInstancesRespondToSelectorNamed(@"YTColdConfig", @"musicClientInfraConfigIosEnableSystemDefaultVolumeControl");
     }
 
     if ([key isEqualToString:@"hideShortsLike"]) {
-        return ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setReelLikeButton:");
+        return ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setReelLikeButton:")
+            || ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setLikeButton:");
     }
 
     if ([key isEqualToString:@"hideShortsDislike"]) {
-        return ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setReelDislikeButton:");
+        return ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setReelDislikeButton:")
+            || ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setDislikeButton:");
     }
 
     if ([key isEqualToString:@"hideShortsComments"]) {
-        return ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setViewCommentButton:");
+        return ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setViewCommentButton:")
+            || ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setCommentInputButton:");
     }
 
     if ([key isEqualToString:@"hideShortsRemix"]) {
-        return ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setRemixButton:");
+        return ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setRemixButton:")
+            || ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setActionButton:");
     }
 
     if ([key isEqualToString:@"hideShortsAvatars"]) {
         return ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setNativePivotButton:")
+            || ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setChannelReelAvatarButton:")
             || ytlInstancesRespondToSelectorNamed(@"YTReelWatchPlaybackOverlayView", @"setPivotButtonElementRenderer:");
     }
 
